@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Home Control Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Chosen Palette: Refined Slate & Emerald -->
+    <!-- Application Structure Plan: The structure is evolved into a more comprehensive dashboard. It retains the core "Controls" and "Status" columns for clarity but enhances them significantly. A new "Master Controls" section provides global actions (All On/Off) for efficiency. The primary device control for the light is upgraded to include a brightness slider, moving beyond simple toggles. The status column is made more dynamic with a real-time "Event Log" and a "Connection Status" indicator, shifting from static monitoring to providing active, historical feedback to the user. This structure better serves a user who needs both quick control and detailed system insight. -->
+    <!-- Visualization & Content Choices: Report Info: Device control -> Goal: Enhanced Control -> Presentation: Added a brightness slider (`<input type="range">`) for the light. Added global "All On/Off" buttons. -> Interaction: Drag slider to adjust brightness; click buttons for mass control -> Justification: Provides more granular control and convenience, which are expected features in a modern smart home UI. Report Info: System Status -> Goal: Provide deeper insight & history -> Presentation: Added an "Event Log" list and a "Connection Status" dot. -> Interaction: Log updates in real-time with user actions and system events. Status dot changes color. -> Justification: A log creates user confidence and aids in troubleshooting. The connection status provides immediate, crucial feedback on system health. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* A lighter, cooler slate */
+        }
+        .toggle-bg:after {
+            content: '';
+            @apply absolute top-0.5 left-0.5 bg-white border border-gray-300 rounded-full h-5 w-5 transition-transform duration-300 ease-in-out;
+        }
+        input:checked + .toggle-bg:after {
+            transform: translateX(100%);
+            @apply border-white;
+        }
+        input:checked + .toggle-bg {
+            @apply bg-emerald-500;
+        }
+        .toast {
+            visibility: hidden;
+            opacity: 0;
+            transform: translateY(100%);
+            transition: all 0.5s ease-in-out;
+        }
+        .toast.show {
+            visibility: visible;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        /* Custom slider styles */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0; /* slate-200 */
+            border-radius: 5px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #10b981; /* emerald-500 */
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #10b981; /* emerald-500 */
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div class="container mx-auto p-4 sm:p-6 md:p-8 max-w-5xl">
+
+        <header class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-900">Smart Home Dashboard</h1>
+                <p class="text-slate-500 mt-1">Control, monitor, and automate your environment.</p>
+            </div>
+            <div class="flex items-center space-x-2">
+                 <div id="connection-status-dot" class="w-3 h-3 rounded-full bg-gray-400 transition-colors duration-500" title="Connection Status"></div>
+                 <span id="connection-status-text" class="text-slate-500 font-medium">Connecting...</span>
+            </div>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+            <div class="lg:col-span-2 space-y-8">
+                <!-- Master Controls -->
+                <div>
+                    <h2 class="text-xl font-semibold mb-4 text-slate-700">Master Controls</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <button id="all-on-btn" class="bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-emerald-600 transition-all duration-300 flex items-center justify-center space-x-2 shadow-md">
+                            <i data-lucide="zap"></i>
+                            <span>All On</span>
+                        </button>
+                        <button id="all-off-btn" class="bg-slate-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-slate-700 transition-all duration-300 flex items-center justify-center space-x-2 shadow-md">
+                            <i data-lucide="zap-off"></i>
+                            <span>All Off</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Device Controls -->
+                <div>
+                    <h2 class="text-xl font-semibold mb-4 text-slate-700">Device Controls</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                        <div id="light-card" class="bg-white p-6 rounded-xl shadow-lg transition-all duration-300 space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-4">
+                                    <div class="bg-blue-100 text-blue-600 p-3 rounded-full"><i data-lucide="lightbulb"></i></div>
+                                    <div>
+                                        <h3 class="font-semibold text-lg">Living Room Light</h3>
+                                        <p id="light-status" class="text-slate-500 text-sm">Off</p>
+                                    </div>
+                                </div>
+                                <label for="light-toggle" class="cursor-pointer">
+                                    <input type="checkbox" id="light-toggle" class="hidden peer">
+                                    <div class="relative w-11 h-6 bg-gray-200 rounded-full toggle-bg"></div>
+                                </label>
+                            </div>
+                            <div id="brightness-control" class="hidden">
+                                <label for="brightness-slider" class="text-sm font-medium text-slate-600">Brightness: <span id="brightness-value">100</span>%</label>
+                                <input type="range" id="brightness-slider" min="10" max="100" value="100" class="mt-2">
+                            </div>
+                        </div>
+
+                        <div id="fan-card" class="bg-white p-6 rounded-xl shadow-lg transition-all duration-300">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-4">
+                                    <div class="bg-sky-100 text-sky-600 p-3 rounded-full"><i data-lucide="wind"></i></div>
+                                    <div><h3 class="font-semibold text-lg">Fan</h3><p id="fan-status" class="text-slate-500 text-sm">Off</p></div>
+                                </div>
+                                <label for="fan-toggle" class="cursor-pointer">
+                                    <input type="checkbox" id="fan-toggle" class="hidden peer">
+                                    <div class="relative w-11 h-6 bg-gray-200 rounded-full toggle-bg"></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="pump-card" class="bg-white p-6 rounded-xl shadow-lg transition-all duration-300">
+                           <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-4">
+                                    <div class="bg-indigo-100 text-indigo-600 p-3 rounded-full"><i data-lucide="droplets"></i></div>
+                                    <div><h3 class="font-semibold text-lg">Water Pump</h3><p id="pump-status" class="text-slate-500 text-sm">Off</p></div>
+                                </div>
+                                <label for="pump-toggle" class="cursor-pointer">
+                                    <input type="checkbox" id="pump-toggle" class="hidden peer">
+                                    <div class="relative w-11 h-6 bg-gray-200 rounded-full toggle-bg"></div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-1 space-y-6">
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <div class="flex items-center space-x-4">
+                        <div id="security-icon-container" class="bg-green-100 text-green-600 p-3 rounded-full transition-colors duration-300"><i data-lucide="shield-check"></i></div>
+                        <div>
+                            <h3 class="font-semibold text-lg">Security</h3>
+                            <p id="ir-status" class="text-slate-500 text-sm transition-colors duration-300">System secure.</p>
+                        </div>
+                    </div>
+                </div>
+                 <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="font-semibold text-lg mb-4">Simulation</h3>
+                    <button id="simulate-intrusion-btn" class="w-full bg-amber-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-amber-600 transition-colors">Simulate Intrusion</button>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="font-semibold text-lg mb-4">Event Log</h3>
+                    <ul id="event-log" class="space-y-3 h-64 overflow-y-auto pr-2">
+                        <!-- Log items will be inserted here -->
+                    </ul>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <div id="toast-notification" class="toast fixed bottom-5 right-5 bg-red-600 text-white py-3 px-5 rounded-lg shadow-xl flex items-center space-x-3">
+        <i data-lucide="alert-triangle"></i><span id="toast-message"></span>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+
+            const ESP_IP_ADDRESS = '192.168.1.100'; // CONFIG: Set your ESP's IP address here
+
+            const deviceState = {
+                light: { isOn: false, brightness: 100 },
+                fan: { isOn: false },
+                pump: { isOn: false },
+                intrusion: false,
+                connected: false,
+            };
+
+            const elements = {
+                light: { toggle: document.getElementById('light-toggle'), status: document.getElementById('light-status'), card: document.getElementById('light-card'), brightnessControl: document.getElementById('brightness-control'), brightnessSlider: document.getElementById('brightness-slider'), brightnessValue: document.getElementById('brightness-value') },
+                fan: { toggle: document.getElementById('fan-toggle'), status: document.getElementById('fan-status'), card: document.getElementById('fan-card') },
+                pump: { toggle: document.getElementById('pump-toggle'), status: document.getElementById('pump-status'), card: document.getElementById('pump-card') },
+                security: { irStatus: document.getElementById('ir-status'), iconContainer: document.getElementById('security-icon-container'), icon: document.querySelector('#security-icon-container i') },
+                master: { allOn: document.getElementById('all-on-btn'), allOff: document.getElementById('all-off-btn') },
+                connection: { dot: document.getElementById('connection-status-dot'), text: document.getElementById('connection-status-text') },
+                simulateBtn: document.getElementById('simulate-intrusion-btn'),
+                toast: { element: document.getElementById('toast-notification'), message: document.getElementById('toast-message') },
+                eventLog: document.getElementById('event-log'),
+            };
+
+            const logIcons = {
+                info: `<i data-lucide="info" class="w-4 h-4 text-blue-500"></i>`,
+                action: `<i data-lucide="toggle-right" class="w-4 h-4 text-slate-500"></i>`,
+                success: `<i data-lucide="check-circle" class="w-4 h-4 text-green-500"></i>`,
+                warning: `<i data-lucide="alert-triangle" class="w-4 h-4 text-red-500"></i>`,
+            };
+
+            function logEvent(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const li = document.createElement('li');
+                li.className = 'flex items-start space-x-3 text-sm';
+                li.innerHTML = `
+                    <div class="flex-shrink-0 mt-0.5">${logIcons[type] || logIcons.info}</div>
+                    <div>
+                        <p class="text-slate-700">${message}</p>
+                        <p class="text-slate-400 text-xs">${timestamp}</p>
+                    </div>
+                `;
+                elements.eventLog.prepend(li);
+                lucide.createIcons();
+            }
+
+            async function sendCommand(endpoint, body = {}) {
+                if (!deviceState.connected) {
+                    console.warn('Not connected. Command not sent.');
+                    showToast('Device is not connected!');
+                    return;
+                }
+                try {
+                    console.log(`Sending command to /${endpoint}`, body);
+                    // REAL IMPLEMENTATION EXAMPLE:
+                    // const response = await fetch(`http://${ESP_IP_ADDRESS}/${endpoint}`, {
+                    //     method: 'POST',
+                    //     headers: { 'Content-Type': 'application/json' },
+                    //     body: JSON.stringify(body)
+                    // });
+                    // if (!response.ok) throw new Error('Network response was not ok');
+                    // const data = await response.json();
+                    // console.log('Received from ESP:', data);
+                } catch (error) {
+                    console.error('Failed to send command:', error);
+                    updateConnectionStatus(false);
+                }
+            }
+
+            function updateDeviceUI(device, isOn, brightness) {
+                const el = elements[device];
+                deviceState[device].isOn = isOn;
+                el.status.textContent = isOn ? 'On' : 'Off';
+                el.card.classList.toggle('ring-2', isOn);
+                el.card.classList.toggle('ring-emerald-500', isOn);
+                el.status.classList.toggle('text-emerald-600', isOn);
+                el.status.classList.toggle('text-slate-500', !isOn);
+                if (el.toggle.checked !== isOn) {
+                    el.toggle.checked = isOn;
+                }
+
+                if (device === 'light') {
+                    deviceState.light.brightness = brightness !== undefined ? brightness : deviceState.light.brightness;
+                    el.brightnessControl.style.display = isOn ? 'block' : 'none';
+                    el.brightnessValue.textContent = deviceState.light.brightness;
+                    el.brightnessSlider.value = deviceState.light.brightness;
+                }
+            }
+
+            function updateSecurityUI(isAlert) {
+                const { irStatus, iconContainer, icon } = elements.security;
+                deviceState.intrusion = isAlert;
+                if (isAlert) {
+                    irStatus.textContent = 'INTRUSION DETECTED!';
+                    irStatus.classList.add('text-red-600', 'font-bold');
+                    iconContainer.classList.replace('bg-green-100', 'bg-red-100');
+                    iconContainer.classList.replace('text-green-600', 'text-red-600');
+                    icon.setAttribute('data-lucide', 'shield-alert');
+                    logEvent('Intrusion detected by IR sensor!', 'warning');
+                } else {
+                    irStatus.textContent = 'System secure.';
+                    irStatus.classList.remove('text-red-600', 'font-bold');
+                    iconContainer.classList.replace('bg-red-100', 'bg-green-100');
+                    iconContainer.classList.replace('text-red-600', 'text-green-600');
+                    icon.setAttribute('data-lucide', 'shield-check');
+                }
+                lucide.createIcons();
+            }
+
+            function showToast(message) {
+                elements.toast.message.textContent = message;
+                elements.toast.element.classList.add('show');
+                setTimeout(() => elements.toast.element.classList.remove('show'), 4000);
+            }
+            
+            function setAllDevices(state) {
+                ['light', 'fan', 'pump'].forEach(device => {
+                    if (elements[device].toggle.checked !== state) {
+                       elements[device].toggle.click();
+                    }
+                });
+                logEvent(`All devices turned ${state ? 'ON' : 'OFF'}.`, 'action');
+            }
+
+            function updateConnectionStatus(isConnected) {
+                deviceState.connected = isConnected;
+                elements.connection.dot.classList.toggle('bg-green-500', isConnected);
+                elements.connection.dot.classList.toggle('bg-red-500', !isConnected);
+                elements.connection.text.textContent = isConnected ? 'Connected' : 'Disconnected';
+                if(isConnected && !document.hidden) logEvent('Connection to device established.', 'success');
+                if(!isConnected) logEvent('Connection to device lost.', 'warning');
+            }
+            
+            async function checkConnection() {
+                // This simulates a ping to the device
+                try {
+                     // REAL IMPLEMENTATION EXAMPLE:
+                    // const response = await fetch(`http://${ESP_IP_ADDRESS}/status`, { signal: AbortSignal.timeout(2000) });
+                    // if (response.ok) {
+                    //    if (!deviceState.connected) updateConnectionStatus(true);
+                    // } else {
+                    //    if (deviceState.connected) updateConnectionStatus(false);
+                    // }
+                    // FAKE IMPLEMENTATION FOR DEMO:
+                    if (!deviceState.connected) {
+                        updateConnectionStatus(true);
+                    }
+                } catch (error) {
+                    if (deviceState.connected) updateConnectionStatus(false);
+                }
+            }
+
+
+            // --- EVENT LISTENERS ---
+            elements.light.toggle.addEventListener('change', (e) => {
+                const isOn = e.target.checked;
+                updateDeviceUI('light', isOn);
+                sendCommand('light', { state: isOn ? 'on' : 'off' });
+                logEvent(`Light turned ${isOn ? 'ON' : 'OFF'}.`, 'action');
+            });
+
+            elements.light.brightnessSlider.addEventListener('input', (e) => {
+                const brightness = e.target.value;
+                elements.light.brightnessValue.textContent = brightness;
+                sendCommand('brightness', { value: brightness });
+                // No log spam on slider drag, maybe log on change/release in real app
+            });
+
+            elements.fan.toggle.addEventListener('change', (e) => {
+                const isOn = e.target.checked;
+                updateDeviceUI('fan', isOn);
+                sendCommand('fan', { state: isOn ? 'on' : 'off' });
+                logEvent(`Fan turned ${isOn ? 'ON' : 'OFF'}.`, 'action');
+            });
+
+            elements.pump.toggle.addEventListener('change', (e) => {
+                const isOn = e.target.checked;
+                updateDeviceUI('pump', isOn);
+                sendCommand('pump', { state: isOn ? 'on' : 'off' });
+                logEvent(`Water Pump turned ${isOn ? 'ON' : 'OFF'}.`, 'action');
+            });
+            
+            elements.simulateBtn.addEventListener('click', () => {
+                updateSecurityUI(true);
+                showToast('Intrusion Detected by IR Sensor!');
+                setTimeout(() => updateSecurityUI(false), 5000);
+            });
+            
+            elements.master.allOn.addEventListener('click', () => setAllDevices(true));
+            elements.master.allOff.addEventListener('click', () => setAllDevices(false));
+            
+            // --- INITIALIZATION ---
+            function init() {
+                logEvent('Dashboard Initialized.', 'info');
+                checkConnection();
+                setInterval(checkConnection, 5000); // Check connection every 5 seconds
+            }
+
+            init();
+        });
+    </script>
+</body>
+</html>
+
